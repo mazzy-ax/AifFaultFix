@@ -1,0 +1,214 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: AifServiceReferenceManager выгружен
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #AifServiceReferenceManager
+    PROPERTIES
+      Name                #AifServiceReferenceManager
+      Extends             #
+      RunOn               #Server
+    ENDPROPERTIES
+    
+    METHODS
+      Version: 3
+      SOURCE #addSerializableAttribute
+        #// mazzy, 21.02.2021
+        #protected static void addSerializableAttribute(str fileName)
+        #{
+        #    TextBuffer  text = new TextBuffer();
+        #    str insStr;
+        #
+        #    void insertBefore(str s)
+        #    {
+        #        text.replace(s, insStr+s);
+        #    }
+        #
+        #    if( !fileName )
+        #        return;
+        #
+        #    new FileIOPermission(fileName, 'rw').assert();
+        #
+        #    if( !text.fromFile(fileName) )
+        #        return;
+        #
+        #    insStr = '[System.SerializableAttribute()]\n    ';
+        #    insertBefore('public partial class AifFault');
+        #    insertBefore('public partial class InfologMessage');
+        #
+        #    insStr = '[System.NonSerializedAttribute()]\n        ';
+        #    insertBefore('private System.Runtime.Serialization.ExtensionDataObject');
+        #
+        #    text.toFile(fileName);
+        #}
+      ENDSOURCE
+      SOURCE #generate
+        #/// <summary>
+        #/// Generates WCF artifacts for the web reference and stores them in the application directory.
+        #/// </summary>
+        #/// <param name="_wsdlUrl"> The WSDL of the web reference. </param>
+        #/// <param name="_codeNamespace"> The .NET code namespace of the web reference. </param>
+        #/// <param name="_overwrite"> A Boolean value that specifies whether existing artifacts of the web reference should be overwritten; optional.</param>
+        #/// <returns>
+        #/// <c>Container</c> with one element that has generated assembly binary.
+        #/// </returns>
+        #/// <remarks> The generated web reference is not added to AOT.</remarks>
+        #/// <exception cref="Exception::Error">The _overwrite parameter is false and the web reference has already been generated.</exception>
+        #/// <exception cref="Exception::Error">The user does not have permission to the web reference directory.</exception>
+        #/// <exception cref="Exception::Error">The generation of web reference artifacts has failed.</exception>
+        #public static container generate(URL _wsdlUrl, AifDotNetCodeNamespace _codeNamespace,boolean _overwrite = false)
+        #{
+        #    Filename             generatedSource;       // name of the generated source file
+        #    List                 generatedFilesList;    // list of generated files.
+        #    AifWebReferenceShare webRefShare;           // web reference share on the app dir
+        #    FilePath             generationTempDir;     // name of generation temp directory
+        #    LanguageId           culture;
+        #    boolean              includeDebugInfo;
+        #    FilePath             fullGeneratedAssemblyName;
+        #    container            generatedAssemblyBinData;
+        #    Microsoft.Dynamics.IntegrationFramework.WebService.GenerationParams generationParams;
+        #    str                  generationErrors;
+        #    str                  errorMessage;
+        #
+        #    void displayGenerationWarnings()
+        #    {
+        #        try
+        #        {
+        #            generationErrors = generationParams.get_Errors();
+        #            if(generationErrors)
+        #            {
+        #                warning(generationErrors);
+        #                // Clear the displayed errors
+        #                generationParams.set_Errors('');
+        #            }
+        #        }
+        #        catch
+        #        {
+        #            // Ignore any exceptions
+        #            exceptionTextFallThrough(); // to avoid compiler warning
+        #        }
+        #    }
+        #;
+        #
+        #    // Validate codenamespace provided first
+        #    AifWebReferenceUtil::validateNamespace(_codeNamespace);
+        #
+        #    // If overwrite is false and web reference already exists we throw an error.
+        #    if(!_overwrite)
+        #    {
+        #        if(AifServiceReferenceManager::doesWebReferenceDirExist(_codeNamespace))
+        #        {
+        #            throw error("@SYS116047");
+        #        }
+        #    }
+        #
+        #    info("@SYS106441");
+        #
+        #    generationTempDir = AifWebReferenceUtil::getTempGenerationDir(_codeNamespace);
+        #    generatedFilesList = new List(Types::String);
+        #    webRefShare =  new AifWebReferenceShare(AifWebReferenceUtil::getWebReferenceRootDir(), _codeNamespace);
+        #    if(!webRefShare.validate())
+        #    {
+        #        throw error(strfmt("@SYS106021", webRefShare.getWebReferenceRootDirectory()));
+        #    }
+        #
+        #    // validate wsdlurl
+        #    AifWebReferenceUtil::validateWsdlUrl(_wsdlUrl);
+        #
+        #    //Check if you have access to wsdl
+        #    AifWebReferenceUtil::validateWsdlAccess(_wsdlUrl);
+        #
+        #    try
+        #    {
+        #        new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #        // BP deviation documented
+        #        generationParams = new  Microsoft.Dynamics.IntegrationFramework.WebService.GenerationParams();
+        #
+        #        // Directory reference to where the webreference assembly are config are located
+        #        // usually application\appl\standard\webreferences\<webreferencename>
+        #        generationParams.set_ApplicationBaseDir(webRefShare.getWebReferenceDirectory());
+        #        generationParams.set_ApplicationConfigName(#WcfClientConfigName);
+        #        generationParams.set_CodeNamespace(_codeNamespace);
+        #        generationParams.set_GeneratedAssemblyName(_codeNamespace);
+        #        generationParams.set_WsdlUrl(_wsdlUrl);
+        #        generationParams.set_GenerationRootDir(generationTempDir);
+        #        generationParams.set_WebReferenceName(_codeNamespace);
+        #        generationParams.set_WcfClientSourceName(#GeneratedWcfProxyFileName);
+        #        generationParams.set_IntegrationCoreAssembly(#IntegrationFrameworkAssembly);
+        #        culture = LanguageTable::defaultLanguage();
+        #        generationParams.set_Culture(culture);
+        #
+        #        // Generate source code calling .NET helper
+        #        // BP deviation documented
+        #        Microsoft.Dynamics.IntegrationFramework.WebService.WebReferenceGenerator::GenerateSources(generationParams);
+        #
+        #        // Since we do a best case effort, check if any errors exist. If yes, then throw them as warnings, so user is aware of the errors.
+        #        // This is similar to svcutil.exe, but not the way VS2008 behaves
+        #        displayGenerationWarnings();
+        #
+        #        generatedSource = generationParams.get_WebServiceProxyName();
+        #
+        #        info(strfmt("@SYS106442", generatedSource));
+        #
+        #        info(strfmt("@SYS113191",  #WcfClientConfigName));
+        #
+        #        AifServiceReferenceManager::addSerializableAttribute(generationTempDir + #GeneratedWcfProxyFileName); // +mazzy
+        #
+        #        // Generate assembly
+        #        // BP deviation documented
+        #        Microsoft.Dynamics.IntegrationFramework.WebService.WebReferenceGenerator::GenerateAssembly(generationParams);
+        #
+        #        // Display warnings if any
+        #        displayGenerationWarnings();
+        #
+        #        info(strfmt("@SYS89681", _codeNamespace + #AssemblyFileExtension));
+        #
+        #        //Get debug Info
+        #        includeDebugInfo = generationParams.get_IncludeDebugInfo();
+        #        CodeAccessPermission::revertAssert();
+        #    }
+        #    catch(Exception::CLRError)
+        #    {
+        #        // Get the CLR error before any other CLR operation
+        #        errorMessage = AifUtil::getClrErrorMessage();
+        #        // Display warnings if any
+        #        displayGenerationWarnings();
+        #
+        #        throw error(errorMessage);
+        #    }
+        #
+        #    // Copy the files from the temp generation dir to the actual share.
+        #    generatedFilesList.addEnd( generatedSource );
+        #    generatedFilesList.addEnd( #GeneratedWcfProxyFileName );
+        #    generatedFilesList.addEnd( _codeNamespace + #AssemblyFileExtension );
+        #    generatedFilesList.addEnd( #WcfClientConfigName );
+        #    if(includeDebugInfo)
+        #        generatedFilesList.addEnd( _codeNamespace + #DebugFileExtension );
+        #
+        #    webRefShare.copyGeneratedFiles(generationTempDir, generatedFilesList);
+        #
+        #    info(strfmt("@SYS106444", webRefShare.getWebReferenceDirectory()));
+        #
+        #    // Clean the temp generation dir
+        #    AifWebReferenceUtil::cleanTempGenerationDir(generationTempDir);
+        #
+        #    info("@SYS106445");
+        #
+        #    // Now we have to return the generated assembly as a container.
+        #    fullGeneratedAssemblyName = webRefShare.getWebReferenceDirectory() + #FilePathDelimiter + _codeNamespace + #AssemblyFileExtension;
+        #    new FileIOPermission(fullGeneratedAssemblyName, 'r').assert();
+        #    generatedAssemblyBinData = AifWebReferenceUtil::readServerFile(fullGeneratedAssemblyName);
+        #    CodeAccessPermission::revertAssert();
+        #
+        #    return generatedAssemblyBinData;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END
